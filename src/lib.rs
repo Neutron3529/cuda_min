@@ -142,7 +142,7 @@ impl<'a, R> Param<'a, R> {
     }
     /// generate parameter from its output, use output's length as number of tasks.
     pub fn new(result: &'a mut [R]) -> Self {
-        let block_size = (
+        let mut block_size = (
             32.max(((result.len() >> 32).max(1)).ilog(2) + 1) as u32,
             1,
             1,
