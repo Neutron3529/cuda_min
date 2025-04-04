@@ -1,4 +1,9 @@
 [package]
+description = "A minimal Rust lib for executing PTX code with nvidia GPU"
+authors = ["Neutron3529 <qweytr1@main.ustc.edu.cn>"]
+license = "AGPL-3.0"
+repository = "https://github.com/Neutron3529/cuda_min"
+keywords = ["cuda", "nvptx"]
 name = "cuda_min"
 version = "0.1.0"
 edition = "2024"
