@@ -147,6 +147,9 @@ impl<'a, R> Param<'a, R> {
             1,
             1,
         );
+        if result.len() <= u32::MAX as usize {
+            block_size.0 = (result.len() as u32).min(block_size.0);
+        }
         let grid_size = ((result.len() / block_size.0 as usize) as u32, 1, 1);
         Self {
             input: Vec::new(),
