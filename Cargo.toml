@@ -5,8 +5,12 @@ license = "AGPL-3.0"
 repository = "https://github.com/Neutron3529/cuda_min"
 keywords = ["cuda", "nvptx"]
 name = "cuda_min"
-version = "0.1.1"
+version = "0.1.2-pre1"
 edition = "2024"
 publish = ["crates-io"]
 
 [dependencies]
+
+[features]
+default = ["panic_handler"]
+panic_handler = []
