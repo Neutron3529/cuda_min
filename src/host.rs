@@ -5,6 +5,9 @@ use cuda::*;
 pub fn compile(s: &str) -> Result<CUmodule, CUerror> {
     Device::init().compile(s)
 }
+pub fn load(s: &str) -> Result<CUmodule, CUerror> {
+    Device::init().load(s)
+}
 /// Function Param
 ///
 /// Packing and transfering parameters and returns to and from GPU.

@@ -41,6 +41,8 @@ unsafe extern "C" {
     #[must_use = "You should check whether the execution successes."]
     fn cuCtxCreate(ctx: *mut CUcontext, flags: c_uint, dev: CUdevice) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
+    fn cuModuleLoad(module: *mut CUmodule, ptx: *const c_char) -> CUresult;
+    #[must_use = "You should check whether the execution successes."]
     fn cuModuleLoadData(module: *mut CUmodule, ptx: *const c_char) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
     fn cuModuleGetFunction(
@@ -105,6 +107,22 @@ impl Device {
             device,
             context: ctx,
         }
+    }
+    /// compile a module. Returns an error code 218 mostly means you do not send the correct PTX code into this function.
+    #[must_use = "You should check whether the execution successes."]
+    pub fn load(&self, file: &str) -> Result<CUmodule, CUerror> {
+        if let Ok(cstr) = &CString::new(file) {
+            self.load_raw(cstr)
+        } else {
+            Err(CUerror(NonZero::new(218).unwrap()))
+        }
+    }
+    /// compile a module, with `&CStr` as its input
+    #[must_use = "You should check whether the execution successes."]
+    pub fn load_raw(&self, file: &CStr) -> Result<CUmodule, CUerror> {
+        let mut module = CUmodule(std::ptr::null_mut());
+        unsafe { cuModuleLoad(&mut module, file.as_ptr() as _)? }
+        Ok(module)
     }
     /// compile a module. Returns an error code 218 mostly means you do not send the correct PTX code into this function.
     #[must_use = "You should check whether the execution successes."]
