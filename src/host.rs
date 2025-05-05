@@ -28,8 +28,8 @@ impl<'a, R> Param<'a, R> {
         self.block_size = (val, 1, 1);
         self.grid_size = (
             (self.result.len() / self.block_size.0 as usize) as u32,
-                          1,
-                          1,
+            1,
+            1,
         );
     }
     /// Set block size and grid size. You must ensure you handled it very well.
@@ -37,7 +37,7 @@ impl<'a, R> Param<'a, R> {
     pub unsafe fn set_block_grid_size(
         &mut self,
         block_size: (u32, u32, u32),
-                                      grid_size: (u32, u32, u32),
+        grid_size: (u32, u32, u32),
     ) {
         self.block_size = block_size;
         self.grid_size = grid_size;
@@ -46,8 +46,8 @@ impl<'a, R> Param<'a, R> {
     pub fn new(result: &'a mut [R]) -> Self {
         let mut block_size = (
             32.max(((result.len() >> 32).max(1)).ilog(2) + 1) as u32,
-                              1,
-                              1,
+            1,
+            1,
         );
         if result.len() <= u32::MAX as usize {
             block_size.0 = (result.len() as u32).min(block_size.0);

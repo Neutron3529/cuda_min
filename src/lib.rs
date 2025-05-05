@@ -75,20 +75,11 @@
 //! cargo.target = "nvptx64-nvidia-cuda"
 //! ```
 //!
-//! In case you don't know what `sm_` your gpu is, but you have installed cuda and have a cpp compiler, you could use this simple program:
+//! In case you don't know what `sm_` your gpu is, you could use this simple program:
 //! ```
-//! #include <stdio.h>
-//! #include <cuda_runtime.h>
-//!
-//! int main() {
-//!     int device_count;
-//!     cudaGetDeviceCount(&device_count);
-//!     for (int i = 0; i < device_count; i++) {
-//!         cudaDeviceProp prop;
-//!         cudaGetDeviceProperties(&prop, i);
-//!         printf("GPU %d: sm_%d%d\n", i, prop.major, prop.minor);
-//!     }
-//!     return 0;
+//! use cuda_min::Device;
+//! fn main() {
+//!     println!("{}", Device::init().get_native_target_cpu().unwrap())
 //! }
 //! ```
 //!
@@ -109,7 +100,9 @@ macro_rules! repeat {
 
 #[cfg(target_arch = "nvptx64")]
 #[cfg_attr(all(target_arch = "nvptx64", feature = "panic_handler"), panic_handler)]
-fn ph(_: &core::panic::PanicInfo) -> ! { loop {} }
+fn ph(_: &core::panic::PanicInfo) -> ! {
+    loop {}
+}
 
 #[cfg(not(target_arch = "nvptx64"))]
 mod host;
