@@ -147,6 +147,9 @@ impl Device {
         let mut major = 0;
         let mut minor = 0;
         unsafe {
+            // According to https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html
+            // CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75
+            // CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76
             cuDeviceGetAttribute(&mut major, 75, self.device)?;
             cuDeviceGetAttribute(&mut minor, 76, self.device)?;
         }
