@@ -14,10 +14,16 @@
 //!
 //! ## 1. Minimal example:
 //!
-//! You must have some valid ptx code, for example, manually write it down:
+//! You must have some valid ptx code. In case you have it, you could use this crate to call the function and read its returned values.
 //! ```
+//! use cuda_min::{Device, Param};
+//! fn main() {
+//!     let ptx = r#"
+//! .version 7.1
+//! .target sm_30
+//! .address_size 64
 //! .visible .entry number_off(
-//! .param .u64 .ptr .align 1 counter_param_0
+//!     .param .u64 .ptr .align 1 counter_param_0
 //! )
 //! {
 //!     .reg .b32 	%r<5>;
@@ -35,31 +41,32 @@
 //!     st.global.u32 	[%rd4], %r4;
 //!     ret;
 //!     // -- End function
-//! }
-//! ```
-//! With such code is stored as "ptx.s", you could use this crate to call the function and read its returned values.
-//! ```
-//! use cuda::*;
-//! fn main() {
-//!     let func = cuda::compile(include_str!("ptx.s")).unwrap().get_function("number_off").unwrap();
+//! }"#; // A better solution is save this file in `ptx.s` and then using `include_str!("ptx.s")` to load it directly.
+//!     println!("{ptx}");
+//!     let device = Device::init(); // fast init, use the first GPU only. Panic if no GPU is provided.
+//!     let module = device.compile(ptx).unwrap();
+//!     let func = module.get_function("number_off").unwrap();
 //!     let mut ret = [0u32;128];
-//!     let mut param = Param::new(&mut ret); // Here the block size and grid size is calculated automatically.
-//!     func.call(param).unwrap().sync().unwrap();
-//!     println!("{:?}", ret); // You should get a vector with 0,1,...,127.
+//!     let mut param = cuda_min::Param::new(&mut ret); // Here the block size and grid size is calculated automatically.
+//!     func.call(param)
+//!         .unwrap()
+//!         .sync()
+//!         .unwrap();
+//!     assert_eq!((0..128).collect::<Vec<_>>(), ret); // You should get a vector with 0,1,...,127.
 //! }
 //! ```
 //! You might notice that, there is no unsafe here, but actually all functions are unsafe. Since you're calling cuda function, there is **actually no safety** here. No need to mark the whole function as unsafe.
 //!
 //! ## Generates ptx code (for example, with nvptx64 backend)
 //!
-//! Although you might write ptx code directly, and you might mainly writting ptx asm in rust code
+//! Although you might write ptx code directly, and you might mainly writting ptx asm in Rust code
 //! due to performance issues. It might still be better to write rust code to generate PTX code.
 //!
 //! Since rust could be regarded as a good-enough asm auto expander, writting rust code is still fruitful.
 //! And since `core::arch::nvptx64` is an experimental backend, writting and compiling nvptx64 code could not be done automatically (unless build.rs/xtask/... is used)
 //!
 //! To generate PTX code, you should firstly set the default target and default compile args for nvptx64:
-//! ```
+//! ```toml
 //! # in ~/.cargo/config, since it is default for all nvptx64 target
 //! [target.'cfg(target_arch="nvptx64")']
 //! rustflags = [
@@ -79,7 +86,7 @@
 //! ```
 //! use cuda_min::Device;
 //! fn main() {
-//!     println!("{}", Device::init().get_native_target_cpu().unwrap())
+//!     println!("{}", Device::init().get_native_target_cpu().unwrap()) // there is a cuda-tool called `nvptx_arch`, you could also use this to obtain the correct GPU architecture.
 //! }
 //! ```
 //!
@@ -87,7 +94,8 @@
 //!
 //! One of the exception might be, a `#[panic_handler]` is needed, in this case, you could write a simple one to makes rust happy:
 //! ```
-//! #[panic_handler] fn panic(_:&core::panic::PanicInfo) ->! { loop{} }
+//! // In fact, this crate already provides such function for target_arch = "nvptx64" with feature "panic_handler". In case you have your own panic handler, just disable that feature.
+//! #[cfg_attr(target_arch = "nvptx64", panic_handler)] fn panic(_:&core::panic::PanicInfo) ->! { loop{} }
 //! ```
 #![cfg_attr(target_arch = "nvptx64", no_std)]
 #![feature(trace_macros)]

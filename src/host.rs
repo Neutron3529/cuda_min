@@ -1,13 +1,14 @@
 #[path = "cuda.rs"]
 mod cuda;
-pub use cuda::Device;
-use cuda::*;
-pub fn compile(s: &str) -> Result<CUmodule, CUerror> {
-    Device::init().compile(s)
-}
-pub fn load(s: &str) -> Result<CUmodule, CUerror> {
-    Device::init().load(s)
-}
+pub use cuda::*;
+// #[Deprecated(since = "0.1.4", note = "Device must be stored, use `let device = Device::init(); let {result} = device.compile({your input})` instead.")]
+// pub fn compile(s: &str) -> Result<CUmodule, CUerror> {
+//     Device::init().compile(s)
+// }
+// #[Deprecated(since = "0.1.4", note = "Device must be stored, use `let device = Device::init(); let {result} = device.load({your input})` instead.")]
+// pub fn load(s: &str) -> Result<CUmodule, CUerror> {
+//     Device::init().load(s)
+// }
 /// Function Param
 ///
 /// Packing and transfering parameters and returns to and from GPU.

@@ -1,7 +1,11 @@
 use crate::Param;
 use std::{
     ffi::{CStr, CString, c_char, c_int, c_uint, c_void},
+    fmt, iter,
+    marker::PhantomData,
+    mem,
     num::NonZero,
+    ptr,
 };
 // CUDA APIs
 #[repr(transparent)]
@@ -9,10 +13,50 @@ use std::{
 pub struct CUerror(NonZero<c_int>);
 pub type CUresult = Result<(), CUerror>;
 
-impl core::fmt::Debug for CUerror {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CUDA error: {}", self.0.get())
+const _ASSERT_SIZE_EQUAL: () = assert!(
+    mem::size_of::<CUresult>() == mem::size_of::<c_int>(),
+    "CUresult must be c_int"
+);
+
+impl fmt::Debug for CUerror {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let code = self.0.get();
+        #[cfg(feature = "cudart")]
+        let name_desc = CUerror::get_name_desc_cudart(code);
+        #[cfg(not(feature = "cudart"))]
+        let name_desc = CUerror::get_name_desc(code);
+        write!(
+            f,
+            "CUDA error: {:?} ({code}): {:?}{}",
+            name_desc.0,
+            name_desc.1,
+            if code == 218 || code == 200 {
+                " (executing `ptxas your_ptx_code.ptx` might be helpful)"
+            } else {
+                ""
+            }
+        )
     }
+}
+#[cfg(feature = "cudart")]
+#[path = "cuda_error/dump_cudart_error.rs"]
+mod dumper;
+#[path = "cuda_error/name_desc.rs"]
+mod dumped;
+
+impl CUerror {
+    /// get error code name and descriptions with cudart apis.
+    #[cfg(feature = "cudart")]
+    pub unsafe fn get_name_desc_cudart(code: c_int) -> (&'static CStr, &'static CStr) {
+        unsafe {
+            (
+                CStr::from_utf8(cudaGetErrorName(mem::transmute(code))),
+                CStr::from_utf8(cudaGetErrorString(mem::transmute(code))),
+            )
+        }
+    }
+    /// get error code name and descriptions with manualy exported code.
+    pub fn get_name_desc(code: c_int) -> (&'static str, &'static str) { dumped::get_name_desc(code) }
 }
 
 #[repr(transparent)]
@@ -26,49 +70,50 @@ pub struct CUdevice(c_int);
 pub struct CUcontext(*mut c_void);
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
-pub struct CUmodule(*mut c_void);
+pub struct CUmodule<'a>(*mut c_void, PhantomData<&'a ()>);
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
-pub struct CUfunction(*mut c_void);
+pub struct CUfunction<'a>(*mut c_void, PhantomData<&'a ()>);
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug)]
 pub struct CUstream(*mut c_void);
-
+#[repr(transparent)]
+pub struct PendingResult<'c>(PhantomData<&'c ()>);
 // 手动绑定 CUDA 驱动 API
 #[link(name = "cuda")]
 unsafe extern "C" {
     #[must_use = "You should check whether the execution successes."]
-    fn cuDeviceGetAttribute(result: &mut c_int, attrib: c_int, dev: CUdevice) -> CUresult;
+    pub fn cuDeviceGetAttribute(result: &mut c_int, attrib: c_int, dev: CUdevice) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuInit(flags: c_uint) -> CUresult;
+    pub fn cuInit(flags: c_uint) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuDeviceGetCount(count: &mut c_int) -> CUresult;
+    pub fn cuDeviceGetCount(count: &mut c_int) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuDeviceGet(device: *mut CUdevice, ordinal: c_int) -> CUresult;
+    pub fn cuDeviceGet(device: *mut CUdevice, ordinal: c_int) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuCtxCreate(ctx: *mut CUcontext, flags: c_uint, dev: CUdevice) -> CUresult;
+    pub fn cuCtxCreate(ctx: *mut CUcontext, flags: c_uint, dev: CUdevice) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuCtxDestroy(ctx: CUcontext) -> CUresult;
+    pub fn cuCtxDestroy(ctx: CUcontext) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuModuleLoad(module: *mut CUmodule, ptx: *const c_char) -> CUresult;
+    pub fn cuModuleLoad(module: *mut CUmodule, ptx: *const c_char) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuModuleLoadData(module: *mut CUmodule, ptx: *const c_char) -> CUresult;
+    pub fn cuModuleLoadData(module: *mut CUmodule, ptx: *const c_char) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuModuleGetFunction(
+    pub fn cuModuleGetFunction(
         func: *mut CUfunction,
         module: CUmodule,
         name: *const c_char,
     ) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuMemAlloc(dptr: *mut *mut c_void, bytesize: usize) -> CUresult;
-    fn cuMemcpyHtoDAsync(
+    pub fn cuMemAlloc(dptr: *mut *mut c_void, bytesize: usize) -> CUresult;
+    pub fn cuMemcpyHtoDAsync(
         dst: *mut c_void,
         src: *const c_void,
         bytesize: usize,
         stream: CUstream,
     ) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuMemcpyDtoHAsync(
+    pub fn cuMemcpyDtoHAsync(
         dst: *mut c_void,
         src: *const c_void,
         bytesize: usize,
@@ -76,7 +121,7 @@ unsafe extern "C" {
     ) -> CUresult;
     // fn cuStreamCreate(stream: *mut CUstream, flag: c_uint) -> CUresult; // Parameters for stream creation (must be 0)
     #[must_use = "You should check whether the execution successes."]
-    fn cuLaunchKernel(
+    pub fn cuLaunchKernel(
         func: CUfunction,
         grid_x: c_uint,
         grid_y: c_uint,
@@ -89,10 +134,12 @@ unsafe extern "C" {
         kernel_args: *mut *mut c_void,
         extra: *mut *mut c_void,
     ) -> CUresult;
-    // fn cuCtxSynchronize() -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    fn cuStreamSynchronize(stream: CUstream) -> CUresult;
+    pub fn cuCtxSynchronize() -> CUresult; // not used yet.
+    #[must_use = "You should check whether the execution successes."]
+    pub fn cuStreamSynchronize(stream: CUstream) -> CUresult;
 }
+
 /// Cuda device and context
 pub struct Device {
     #[allow(dead_code)]
@@ -106,12 +153,12 @@ impl Drop for Device {
     }
 }
 impl Device {
-    const STREAM: CUstream = CUstream(std::ptr::null_mut()); // default null stream
+    const STREAM: CUstream = CUstream(ptr::null_mut()); // default null stream
     /// the very fast approach to init first device and context, panic if init procedure contains errors.
     /// If you want to init more than the default GPU, use `init_all` instead.
     pub fn init() -> Self {
         let mut device = CUdevice(0);
-        let mut ctx = CUcontext(std::ptr::null_mut());
+        let mut ctx = CUcontext(ptr::null_mut());
         unsafe {
             cuInit(0).unwrap();
             cuDeviceGet(&mut device, 0).unwrap();
@@ -131,7 +178,7 @@ impl Device {
             let mut res = Vec::with_capacity(count as usize);
             for i in 0..count {
                 let mut device = CUdevice(0);
-                let mut ctx = CUcontext(std::ptr::null_mut());
+                let mut ctx = CUcontext(ptr::null_mut());
                 cuDeviceGet(&mut device, i)?;
                 cuCtxCreate(&mut ctx, 0, device)?;
                 res.push(Self {
@@ -163,7 +210,7 @@ impl Device {
     }
     /// compile a module. Returns an error code 218 mostly means you do not send the correct PTX code into this function.
     #[must_use = "You should check whether the execution successes."]
-    pub fn load(&self, file: &str) -> Result<CUmodule, CUerror> {
+    pub fn load<'a>(&'a self, file: &str) -> Result<CUmodule<'a>, CUerror> {
         if let Ok(cstr) = &CString::new(file) {
             self.load_raw(cstr)
         } else {
@@ -172,14 +219,14 @@ impl Device {
     }
     /// compile a module, with `&CStr` as its input
     #[must_use = "You should check whether the execution successes."]
-    pub fn load_raw(&self, file: &CStr) -> Result<CUmodule, CUerror> {
-        let mut module = CUmodule(std::ptr::null_mut());
+    pub fn load_raw<'a>(&'a self, file: &CStr) -> Result<CUmodule<'a>, CUerror> {
+        let mut module = CUmodule(ptr::null_mut(), PhantomData);
         unsafe { cuModuleLoad(&mut module, file.as_ptr() as _)? }
         Ok(module)
     }
     /// compile a module. Returns an error code 218 mostly means you do not send the correct PTX code into this function.
     #[must_use = "You should check whether the execution successes."]
-    pub fn compile(&self, ptx: &str) -> Result<CUmodule, CUerror> {
+    pub fn compile<'a>(&'a self, ptx: &str) -> Result<CUmodule<'a>, CUerror> {
         if let Ok(cstr) = &CString::new(ptx) {
             self.compile_raw(cstr)
         } else {
@@ -188,16 +235,19 @@ impl Device {
     }
     /// compile a module, with `&CStr` as its input
     #[must_use = "You should check whether the execution successes."]
-    pub fn compile_raw(&self, c_ptx: &CStr) -> Result<CUmodule, CUerror> {
-        let mut module = CUmodule(std::ptr::null_mut());
+    pub fn compile_raw<'a>(&'a self, c_ptx: &CStr) -> Result<CUmodule<'a>, CUerror> {
+        let mut module = CUmodule(ptr::null_mut(), PhantomData);
         unsafe { cuModuleLoadData(&mut module, c_ptx.as_ptr() as _)? }
         Ok(module)
     }
 }
-impl CUmodule {
+impl<'a> CUmodule<'a> {
     /// Get `CUfunction` from a module.
     #[must_use = "You should check whether the execution successes."]
-    pub fn get_function(self, ptx: &str) -> Result<CUfunction, CUerror> {
+    pub fn get_function<'b>(self, ptx: &str) -> Result<CUfunction<'b>, CUerror>
+    where
+        'a: 'b,
+    {
         if let Ok(cstr) = &CString::new(ptx) {
             self.get_function_raw(cstr)
         } else {
@@ -206,28 +256,25 @@ impl CUmodule {
     }
     /// Get `CUfunction` from a module, with `&CStr` as its input.
     #[must_use = "You should check whether the execution successes."]
-    pub fn get_function_raw(self, function_name: &CStr) -> Result<CUfunction, CUerror> {
-        let mut function = CUfunction(std::ptr::null_mut());
+    pub fn get_function_raw<'b>(self, function_name: &CStr) -> Result<CUfunction<'b>, CUerror>
+    where
+        'a: 'b,
+    {
+        let mut function = CUfunction(ptr::null_mut(), PhantomData);
         unsafe { cuModuleGetFunction(&mut function, self, function_name.as_ptr())? }
         Ok(function)
     }
 }
 
-pub struct PendingResult<'a>([&'a (); 0]);
-impl<'a> PendingResult<'a> {
-    /// Wait for all the code finishes.
-    #[must_use = "You should check whether the execution successes."]
-    pub fn sync(self) -> CUresult {
-        unsafe { cuStreamSynchronize(Device::STREAM) }
-    }
-}
-
-impl CUfunction {
+impl<'b> CUfunction<'b> {
     /// Call a CUfunction, take care!
     /// SAFETY: You should check very careful since it is a ffi call, and it calls an unsafe function.
     /// You should notice that, this is not marked as unsafe, but you should always remember, this is not a safe function.
     #[must_use = "You should check whether the execution successes."]
-    pub fn call<'a, R>(self, param: Param<'a, R>) -> Result<PendingResult<'a>, CUerror> {
+    pub fn call<'c, R>(self, param: Param<'c, R>) -> Result<PendingResult<'c>, CUerror>
+    where
+        'b: 'c,
+    {
         // SAFETY: Massive ffi calls.
         unsafe {
             let len = param.result.len();
@@ -235,14 +282,14 @@ impl CUfunction {
                 // SAFETY in NonZero::new_unchecked: 1 != 0
                 Err(CUerror(NonZero::new_unchecked(1)))?
             }
-            let length = len * core::mem::size_of::<R>();
-            let mut ret = core::ptr::null_mut();
+            let length = len * mem::size_of::<R>();
+            let mut ret = ptr::null_mut();
             cuMemAlloc(&mut ret, length)?;
             cuMemcpyHtoDAsync(ret, param.result.as_ptr() as _, length, Device::STREAM)?;
             let mut device_mem = param
                 .input
                 .iter()
-                .map(|_| core::ptr::null_mut())
+                .map(|_| ptr::null_mut())
                 .collect::<Vec<_>>();
             for (i, size) in device_mem.iter_mut().zip(param.input.iter().map(|x| x.1)) {
                 cuMemAlloc(i, size)?
@@ -252,7 +299,7 @@ impl CUfunction {
             }
             let mut device_ref = device_mem
                 .iter_mut()
-                .chain(core::iter::once(&mut ret))
+                .chain(iter::once(&mut ret))
                 .map(|x| x as *mut _ as *mut c_void)
                 .collect::<Vec<_>>();
             // println!("{self:?} {:?}", device_mem);
@@ -267,10 +314,18 @@ impl CUfunction {
                 param.shared_mem,        // 共享内存
                 Device::STREAM,          // 流
                 device_ref.as_mut_ptr(), // 参数指针
-                core::ptr::null_mut(),
+                ptr::null_mut(),
             )?;
             cuMemcpyDtoHAsync(param.result.as_mut_ptr() as _, ret, length, Device::STREAM)?
         }
-        Ok(PendingResult([]))
+        Ok(PendingResult(PhantomData))
+    }
+}
+
+impl<'c> PendingResult<'c> {
+    /// Wait for all the code finishes.
+    #[must_use = "You should check whether the execution successes."]
+    pub fn sync(self) -> CUresult {
+        unsafe { cuStreamSynchronize(Device::STREAM) }
     }
 }
