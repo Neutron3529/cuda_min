@@ -67,19 +67,26 @@
 //!
 //! To generate PTX code, you should firstly set the default target and default compile args for nvptx64:
 //! ```toml
-//! # in ~/.cargo/config, since it is default for all nvptx64 target
+//! # In `~/.cargo/config.toml`, since it is default for all nvptx64 target
 //! [target.'cfg(target_arch="nvptx64")']
 //! rustflags = [
 //!     "-C", "target-cpu=sm_86", # sm_86 is what suits for my computer (nvidia 3060 on my Laptop, you should change it with what `cudaGetDeviceProperties` provides)
 //!     # uncomment only one of the following lines:
 //!     # "-C", "linker=llvm-bitcode-linker" # yields `crate-name.ptx`, but very slow. Needs to install llvm-bitcode-linker
-//!     # "--emit=asm"                       # fast, but yields `crate-name-{hash}.s`. Needs to execute cargo clean otherwise the .s might not be yielded.
+//!     # "--emit=asm"                       # fast, but yields `deps/crate-name-{hash}.s`. Needs to execute cargo clean otherwise the .s might not be yielded.
 //! ]
-//! # in your crate that targets `nvptx64`
+//! ```
+//! ```toml
+//! # In `.cargo/config.toml`, your crate that targets `nvptx64`
 //! [build]
 //! target = "nvptx64-nvidia-cuda"
 //! [rust-analyzer]
 //! cargo.target = "nvptx64-nvidia-cuda"
+//! ```
+//! ```toml
+//! #  In`Cargo.toml`, your crate that targets `nvptx64`, if `llvm-bitcode-linker` is chosen:
+//! [lib]
+//! crate-type = ["cdylib"] # comment this line if you choose `--emit-asm` mode, since it might try call `rust-ptx-linker`
 //! ```
 //!
 //! In case you don't know what `sm_` your gpu is, you could use this simple program:
