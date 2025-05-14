@@ -71,9 +71,10 @@
 //! [target.'cfg(target_arch="nvptx64")']
 //! rustflags = [
 //!     "-C", "target-cpu=sm_86", # sm_86 is what suits for my computer (nvidia 3060 on my Laptop, you should change it with what `cudaGetDeviceProperties` provides)
-//!     # uncomment only one of the following lines:
-//!     # "-C", "linker=llvm-bitcode-linker" # yields `crate-name.ptx`, but very slow. Needs to install llvm-bitcode-linker
+//!     ### uncomment only one of the following lines:
+//!     # "-C", "linker=llvm-bitcode-linker" # yields `crate-name.ptx`, but very slow. Needs to install `llvm-bitcode-linker` and its dependencies, e.g., `llvm-tools`
 //!     # "--emit=asm"                       # fast, but yields `deps/crate-name-{hash}.s`. Needs to execute cargo clean otherwise the .s might not be yielded.
+//!     ### both of the above code generates almost the same code.
 //! ]
 //! ```
 //! ```toml
