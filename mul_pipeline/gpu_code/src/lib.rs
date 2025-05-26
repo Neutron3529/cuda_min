@@ -1,15 +1,12 @@
+#![no_main]
 #![cfg(target_arch = "nvptx64")]
 #![no_std]
-#![no_main]
 #![feature(abi_ptx, stdarch_nvptx, asm_experimental_arch)]
 
 use core::arch::nvptx::*;
 
 #[allow(unused_imports)] // for its panic-handler
 use cuda_min;
-
-#[repr(C)]
-struct PrintArgs(i32, i32, i32, i32);
 
 #[unsafe(no_mangle)]
 pub unsafe extern "ptx-kernel" fn vec_add(
@@ -24,5 +21,7 @@ pub unsafe extern "ptx-kernel" fn vec_add(
         let left = *input1.wrapping_add(index as usize);
         let right = *input2.wrapping_add(index as usize);
         *output.wrapping_add(index as usize) = left + right + offset;
+
+        vprintf("wtf?\0".as_ptr(), core::ptr::null());
     }
 }

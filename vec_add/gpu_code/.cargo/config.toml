@@ -1,5 +1,0 @@
-[build]
-target = "nvptx64-nvidia-cuda"
-
-[rust-analyzer]
-cargo.target = "nvptx64-nvidia-cuda"

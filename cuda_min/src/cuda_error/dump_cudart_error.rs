@@ -1,25 +1,25 @@
 #[cfg(feature = "cudart")]
 use crate::CUresult;
-use std::{
-    ffi::CStr,
-    fs::File,
-    io::{BufWriter, Write},
-};
 #[cfg(not(feature = "cudart"))]
 type CUresult = std::ffi::c_int;
 
 #[link(name = "cudart")]
 unsafe extern "C" {
-    fn cudaGetErrorName(error: CUresult) -> *const i8;
-    fn cudaGetErrorString(error: CUresult) -> *const i8;
+    pub fn cudaGetErrorName(error: CUresult) -> *const i8;
+    pub fn cudaGetErrorString(error: CUresult) -> *const i8;
 }
 
 /**
+ * Usage:
+ *
 ```bash
-export LIBRARY_PATH=$CUDA_PATH/bin && export LD_LIBRARY_PATH=$CUDA_PATH/bin && rustc --edition 2024 dump_cudart_error.rs -o dump_cudart_error && ./dump_cudart_error && rm ./dump_cudart_error
+LIBRARY_PATH=$CUDA_PATH/lib rustc --edition 2024 dump_cudart_error.rs -o dump_cudart_error && ./dump_cudart_error && rustfmt --style-edition 2024 name_desc.rs && rm ./dump_cudart_error
 ```
-*/
-
+ *
+ * Notice that, this file behind #[cfg(feature = "cudart")], thus logically with #[cfg(not(feature = "cudart"))], fn main will never being compiled.
+ *
+ * In case you want this main file, you should regard this file as a single .rs file, using bash script above to compile and execute.
+ */
 #[cfg(not(feature = "cudart"))]
 fn main() {
     unsafe {

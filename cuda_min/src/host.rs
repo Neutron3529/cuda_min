@@ -22,54 +22,65 @@ pub struct Param<'a, R> {
     pub shared_mem: u32,
     block_size: (u32, u32, u32),
     grid_size: (u32, u32, u32),
+    len: usize,
 }
 impl<'a, R> Param<'a, R> {
     /// Set block 1d size. Currently only 1d size could be set directly (since result is a 1d vector)
-    pub fn block_size(&mut self, val: u32) {
+    pub fn block_size(mut self, val: u32) -> Self {
         self.block_size = (val, 1, 1);
-        self.grid_size = (
-            (self.result.len() / self.block_size.0 as usize) as u32,
-            1,
-            1,
-        );
+        self.grid_size = ((self.len / self.block_size.0 as usize) as u32, 1, 1);
+        self
     }
     /// Set block size and grid size. You must ensure you handled it very well.
     /// Although all the functions are not very safe. This function is extremely unsafe.
     pub unsafe fn set_block_grid_size(
-        &mut self,
+        mut self,
         block_size: (u32, u32, u32),
         grid_size: (u32, u32, u32),
-    ) {
+    ) -> Self {
         self.block_size = block_size;
         self.grid_size = grid_size;
+        self.len = block_size.0 as usize * grid_size.0 as usize;
+        self
     }
-    /// generate parameter from its output, use output's length as number of tasks.
+    /// Generate parameter from its output, use output's length as number of tasks.
     pub fn new(result: &'a mut [R]) -> Self {
-        let mut block_size = (
-            32.max(((result.len() >> 32).max(1)).ilog(2) + 1) as u32,
-            1,
-            1,
-        );
-        if result.len() <= u32::MAX as usize {
-            block_size.0 = (result.len() as u32).min(block_size.0);
-        }
-        let grid_size = ((result.len() / block_size.0 as usize) as u32, 1, 1);
+        let len = result.len();
+        let block_size = (32.min(len as u32), 1, 1);
+        let grid_size = ((len / block_size.0 as usize) as u32, 1, 1);
         Self {
             input: Vec::new(),
             result,
             shared_mem: 0,
             block_size,
             grid_size,
+            len,
         }
     }
-    /// push vectors into this parameter collection.
-    pub fn push<T>(&mut self, item: &[T]) -> bool {
+    /// Convenience push method, panic if the length is incorrect.
+    pub fn push<T>(self, item: &[T]) -> Self {
+        self.checked_push(item).unwrap_or_else(|x| x)
+    }
+    /// Set real length
+    pub fn len(mut self, len: usize) -> Self {
+        self.len = len;
+        self.grid_size.0 = len as u32 / self.block_size.0;
+        self
+    }
+    /// Push vectors into this parameter collection.
+    pub fn checked_push<T>(mut self, item: &[T]) -> Result<Self, Self> {
         // let size = core::mem::size_of_val(item);
         if let Some(size) = core::num::NonZero::new(core::mem::size_of::<T>() * item.len()) {
             self.input.push((item.as_ptr() as _, size.get()));
-            true
+            Ok(self)
         } else {
-            false
+            self.input.push((core::ptr::null(), 0));
+            Err(self)
         }
+    }
+    /// Set shared mem
+    pub fn shared(mut self, size: u32) -> Self {
+        self.shared_mem = size;
+        self
     }
 }

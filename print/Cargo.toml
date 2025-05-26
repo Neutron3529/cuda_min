@@ -1,0 +1,10 @@
+[package]
+name = "vec_add"
+version = "0.1.0"
+edition = "2024"
+publish = ["crates-io"]
+
+[dependencies]
+cuda_min = { path = "../cuda_min" }
+[build-dependencies]
+cuda_min = { path = "../cuda_min" }

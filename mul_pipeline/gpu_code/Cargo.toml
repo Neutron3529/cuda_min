@@ -1,13 +1,10 @@
 [lib]
 crate-type = ["cdylib"]
 [package]
-name = "gpu_ptx_code"
+name = "gpu_code"
 version = "0.1.0"
 edition = "2024"
 publish = ["crates-io"]
 
 [dependencies]
 cuda_min = { path = "../../cuda_min" }
-
-[profile.cuda]
-inherits = "release"

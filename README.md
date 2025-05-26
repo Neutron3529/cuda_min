@@ -30,9 +30,8 @@ cargo add cuda_min --build # add convenient build support
 cat > build.rs <<EOF
 fn main() {
     cuda_min::GpuCode::new("gpu_code", "../gpu_code")
-        // .target(env!("OUT_DIR")) // specific the build target (relative to `build.rs`), default is "target". In a workspace, you might want to specific this target rather than using the default output dir. 
-        // .profile("debug") // Not recommended.
-        // .clean() // Will remove the whole target folder, PLEASE ENSURE you specific a safe folder (e.g., execute `.target(env!("OUT_DIR"))`) otherwise important files (e.g., your compiled cuda program) will be removed.
+        // .target(env!("OUT_DIR")) // specific the build target (relative to `build.rs`), default is "target".
+        // .profile("debug") // not recommended.
         .build()
 }
 EOF
@@ -74,7 +73,3 @@ Won't yield error unless you create a `cuda_min::GpuCode` struct and call `.buil
 Affect only CPU side.
 
 You must make sure `$CUDA_PATH/lib` in  `{LD,}_LIBRARY_PATH` thus cargo can find the cudart library. Currently a `cuda_error_code_generator.rs` script is used for generating cuda error related scripts.
-
-## Examples
-
-There are various examples in https://github.com/Neutron3529/cuda_min

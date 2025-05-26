@@ -1,6 +1,6 @@
 use crate::Param;
 use std::{
-    ffi::{CStr, CString, c_char, c_int, c_uint, c_void},
+    ffi::{c_char, c_int, c_uint, c_void, CStr, CString},
     fmt, iter,
     marker::PhantomData,
     mem,
@@ -22,7 +22,7 @@ impl fmt::Debug for CUerror {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let code = self.0.get();
         #[cfg(feature = "cudart")]
-        let name_desc = CUerror::get_name_desc_cudart(code);
+        let name_desc = unsafe { CUerror::get_name_desc_cudart(code) };
         #[cfg(not(feature = "cudart"))]
         let name_desc = CUerror::get_name_desc(code);
         write!(
@@ -38,11 +38,11 @@ impl fmt::Debug for CUerror {
         )
     }
 }
+#[path = "cuda_error/name_desc.rs"]
+mod dumped;
 #[cfg(feature = "cudart")]
 #[path = "cuda_error/dump_cudart_error.rs"]
 mod dumper;
-#[path = "cuda_error/name_desc.rs"]
-mod dumped;
 
 impl CUerror {
     /// get error code name and descriptions with cudart apis.
@@ -50,13 +50,15 @@ impl CUerror {
     pub unsafe fn get_name_desc_cudart(code: c_int) -> (&'static CStr, &'static CStr) {
         unsafe {
             (
-                CStr::from_utf8(cudaGetErrorName(mem::transmute(code))),
-                CStr::from_utf8(cudaGetErrorString(mem::transmute(code))),
+                CStr::from_ptr(dumper::cudaGetErrorName(mem::transmute(code))),
+                CStr::from_ptr(dumper::cudaGetErrorString(mem::transmute(code))),
             )
         }
     }
     /// get error code name and descriptions with manualy exported code.
-    pub fn get_name_desc(code: c_int) -> (&'static str, &'static str) { dumped::get_name_desc(code) }
+    pub fn get_name_desc(code: c_int) -> (&'static str, &'static str) {
+        dumped::get_name_desc(code)
+    }
 }
 
 #[repr(transparent)]
@@ -134,6 +136,8 @@ unsafe extern "C" {
         kernel_args: *mut *mut c_void,
         extra: *mut *mut c_void,
     ) -> CUresult;
+    #[must_use = "You should check whether the execution successes."]
+    pub fn cuFuncGetAttribute(result: &mut c_int, attrib: c_int, func: CUfunction) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
     pub fn cuCtxSynchronize() -> CUresult; // not used yet.
     #[must_use = "You should check whether the execution successes."]
@@ -267,6 +271,16 @@ impl<'a> CUmodule<'a> {
 }
 
 impl<'b> CUfunction<'b> {
+    /// Get major and minor CUDA capability version to calculate sm_** for generating better code.
+    pub fn get_max_thread_per_block(&self) -> Result<c_int, CUerror> {
+        let mut max_thread = 0;
+        unsafe {
+            // According to https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html
+            // CU_FUNC_ATTRIBUTE_MAX_THREAD_PER_BLOCK = 0
+            cuFuncGetAttribute(&mut max_thread, 0, *self)?;
+        }
+        Ok(max_thread)
+    }
     /// Call a CUfunction, take care!
     /// SAFETY: You should check very careful since it is a ffi call, and it calls an unsafe function.
     /// You should notice that, this is not marked as unsafe, but you should always remember, this is not a safe function.
@@ -277,12 +291,12 @@ impl<'b> CUfunction<'b> {
     {
         // SAFETY: Massive ffi calls.
         unsafe {
-            let len = param.result.len();
+            let len = param.len;
             if len == 0 {
                 // SAFETY in NonZero::new_unchecked: 1 != 0
                 Err(CUerror(NonZero::new_unchecked(1)))?
             }
-            let length = len * mem::size_of::<R>();
+            let length = param.result.len() * mem::size_of::<R>();
             let mut ret = ptr::null_mut();
             cuMemAlloc(&mut ret, length)?;
             cuMemcpyHtoDAsync(ret, param.result.as_ptr() as _, length, Device::STREAM)?;
@@ -291,11 +305,11 @@ impl<'b> CUfunction<'b> {
                 .iter()
                 .map(|_| ptr::null_mut())
                 .collect::<Vec<_>>();
-            for (i, size) in device_mem.iter_mut().zip(param.input.iter().map(|x| x.1)) {
-                cuMemAlloc(i, size)?
-            }
-            for (device, host) in device_mem.iter().zip(param.input.iter()) {
-                cuMemcpyHtoDAsync(*device, host.0, host.1, Device::STREAM)?
+            for (device, &(ptr, size)) in device_mem.iter_mut().zip(param.input.iter()) {
+                if size > 0 {
+                    cuMemAlloc(device, size)?;
+                    cuMemcpyHtoDAsync(*device, ptr, size, Device::STREAM)?
+                }
             }
             let mut device_ref = device_mem
                 .iter_mut()

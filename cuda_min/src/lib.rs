@@ -105,7 +105,7 @@
 //! // In fact, this crate already provides such function for target_arch = "nvptx64" with feature "panic_handler". In case you have your own panic handler, just disable that feature.
 //! #[cfg_attr(target_arch = "nvptx64", panic_handler)] fn panic(_:&core::panic::PanicInfo) ->! { loop{} }
 //! ```
-#![cfg_attr(target_arch = "nvptx64", no_std)]
+#![cfg_attr(target_arch = "nvptx64", no_std, feature(asm_experimental_arch))]
 #![feature(trace_macros)]
 
 #[macro_export]
@@ -115,12 +115,21 @@ macro_rules! repeat {
 }
 
 #[cfg(target_arch = "nvptx64")]
-#[cfg_attr(all(target_arch = "nvptx64", feature = "panic_handler"), panic_handler)]
-fn ph(_: &core::panic::PanicInfo) -> ! {
-    loop {}
+#[cfg_attr(all(target_arch = "nvptx64", feature = "panic-handler"), panic_handler)]
+unsafe fn ph(_: &core::panic::PanicInfo) -> ! {
+    abort()
+}
+#[inline(always)]
+#[cfg(target_arch = "nvptx64")]
+pub fn abort() -> ! {
+    unsafe { core::arch::asm!("trap;", options(noreturn)) }
 }
 
 #[cfg(not(target_arch = "nvptx64"))]
 mod host;
 #[cfg(not(target_arch = "nvptx64"))]
 pub use host::*;
+#[cfg(all(feature = "build-script-with-llvm-bitcode-linker", not(target_arch = "nvptx64")))]
+mod build;
+#[cfg(all(feature = "build-script-with-llvm-bitcode-linker", not(target_arch = "nvptx64")))]
+pub use build::GpuCode;

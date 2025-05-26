@@ -5,7 +5,7 @@ license = "AGPL-3.0"
 repository = "https://github.com/Neutron3529/cuda_min"
 keywords = ["cuda", "nvptx"]
 name = "cuda_min"
-version = "0.1.4"
+version = "0.1.5-before-vprintf-fixed"
 edition = "2024"
 publish = ["crates-io"]
 autoexamples = false
@@ -13,6 +13,7 @@ autoexamples = false
 [dependencies]
 
 [features]
-default = ["panic_handler"]
-panic_handler = []
-cudart = [] # You must make sure `$CUDA_PATH/lib` in  {LD,}_LIBRARY_PATH thus the rust can find the cudart library. Currently a `cuda_error_code_generator.rs` script is used for generating cuda error related scripts.
+default = ["panic-handler", "build-script-with-llvm-bitcode-linker"]
+panic-handler = []
+cudart = [] # You must make sure `$CUDA_PATH/lib` in  {LD,}_LIBRARY_PATH thus cargo can find the cudart library. Currently a `cuda_error_code_generator.rs` script is used for generating cuda error related scripts.
+build-script-with-llvm-bitcode-linker = [] # Enabled by default, only works with host environment, do not affect GPU side.
