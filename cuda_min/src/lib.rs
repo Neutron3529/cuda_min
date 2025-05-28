@@ -129,7 +129,13 @@ pub fn abort() -> ! {
 mod host;
 #[cfg(not(target_arch = "nvptx64"))]
 pub use host::*;
-#[cfg(all(feature = "build-script-with-llvm-bitcode-linker", not(target_arch = "nvptx64")))]
+#[cfg(all(
+    feature = "build-script-with-llvm-bitcode-linker",
+    not(target_arch = "nvptx64")
+))]
 mod build;
-#[cfg(all(feature = "build-script-with-llvm-bitcode-linker", not(target_arch = "nvptx64")))]
+#[cfg(all(
+    feature = "build-script-with-llvm-bitcode-linker",
+    not(target_arch = "nvptx64")
+))]
 pub use build::GpuCode;

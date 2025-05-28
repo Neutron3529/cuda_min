@@ -1,6 +1,6 @@
 use crate::Param;
 use std::{
-    ffi::{c_char, c_int, c_uint, c_void, CStr, CString},
+    ffi::{CStr, CString, c_char, c_int, c_uint, c_void},
     fmt, iter,
     marker::PhantomData,
     mem,
@@ -13,11 +13,6 @@ use std::{
 pub struct CUerror(NonZero<c_int>);
 pub type CUresult = Result<(), CUerror>;
 
-const _ASSERT_SIZE_EQUAL: () = assert!(
-    mem::size_of::<CUresult>() == mem::size_of::<c_int>(),
-    "CUresult must be c_int"
-);
-
 impl fmt::Debug for CUerror {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let code = self.0.get();
@@ -25,33 +20,39 @@ impl fmt::Debug for CUerror {
         let name_desc = unsafe { CUerror::get_name_desc_cudart(code) };
         #[cfg(not(feature = "cudart"))]
         let name_desc = CUerror::get_name_desc(code);
-        write!(
-            f,
-            "CUDA error: {:?} ({code}): {:?}{}",
-            name_desc.0,
-            name_desc.1,
-            if code == 218 || code == 200 {
-                " (executing `ptxas your_ptx_code.ptx` might be helpful)"
-            } else {
-                ""
-            }
-        )
+        if code == 218 || code == 200 {
+            write!(
+                f,
+                "CUDA error: {:?} ({code}): {:?}  (executing `ptxas -arch sm_{{your gpu sm version}} your_ptx_code.ptx` might be helpful)",
+                name_desc.0, name_desc.1,
+            )
+        } else {
+            write!(
+                f,
+                "CUDA error: {:?} ({code}): {:?}",
+                name_desc.0, name_desc.1
+            )
+        }
     }
 }
 #[path = "cuda_error/name_desc.rs"]
 mod dumped;
-#[cfg(feature = "cudart")]
+#[cfg(feature = "native-error-desc")]
 #[path = "cuda_error/dump_cudart_error.rs"]
 mod dumper;
 
 impl CUerror {
+    const _ASSERT_SIZE_EQUAL: () = assert!(
+        mem::size_of::<CUresult>() == mem::size_of::<c_int>(),
+                                           "CUresult must be c_int"
+    );
     /// get error code name and descriptions with cudart apis.
-    #[cfg(feature = "cudart")]
-    pub unsafe fn get_name_desc_cudart(code: c_int) -> (&'static CStr, &'static CStr) {
+    #[cfg(feature = "native-error-desc")]
+    pub unsafe fn cu_get_name_desc(code: c_int) -> (&'static CStr, &'static CStr) {
         unsafe {
             (
-                CStr::from_ptr(dumper::cudaGetErrorName(mem::transmute(code))),
-                CStr::from_ptr(dumper::cudaGetErrorString(mem::transmute(code))),
+                dumper::cu_get_error_name(mem::transmute(code)),
+                dumper::cu_get_error_string(mem::transmute(code)),
             )
         }
     }

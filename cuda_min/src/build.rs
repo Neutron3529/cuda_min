@@ -58,9 +58,11 @@ fn build(name: &str, nvptx_dir: &str, target_dir: &str, profile: &str, clean: bo
     println!("cargo::rerun-if-changed={nvptx_dir}/src");
     println!("cargo::rerun-if-changed=build.rs");
     println!("cargo::rerun-if-env-changed=CUDA_PATH");
-
+    #[cfg(feature = "cudart")]
     if let Ok(cuda_path) = env::var("CUDA_PATH").or(env::var("CUDA_HOME")) {
-        warning(format_args!("try searching with cudart since CUDA_PATH or CUDA_HOME are not all None.\nprint rustc-link-search={cuda_path}/lib"));
+        warning(format_args!(
+            "try searching with cudart since CUDA_PATH or CUDA_HOME are not all None.\nprint rustc-link-search={cuda_path}/lib"
+        ));
         println!("cargo:rustc-link-search={cuda_path}/lib");
     } else {
         warning(
