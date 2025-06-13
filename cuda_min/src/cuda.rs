@@ -94,9 +94,13 @@ unsafe extern "C" {
     #[must_use = "You should check whether the execution successes."]
     pub fn cuDeviceGet(device: *mut CUdevice, ordinal: c_int) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    pub fn cuCtxCreate(ctx: *mut CUcontext, flags: c_uint, dev: CUdevice) -> CUresult;
+    pub fn cuCtxCreate_v2(ctx: *mut CUcontext, flags: c_uint, dev: CUdevice) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    pub fn cuCtxDestroy(ctx: CUcontext) -> CUresult;
+    pub fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult;
+    #[must_use = "You should check whether the execution successes."]
+    pub fn cuCtxSetLimit(limit: c_uint, size: usize) -> CUresult;
+    #[must_use = "You should check whether the execution successes."]
+    pub fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
     pub fn cuModuleLoad(module: *mut CUmodule, ptx: *const c_char) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
@@ -108,15 +112,15 @@ unsafe extern "C" {
         name: *const c_char,
     ) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    pub fn cuMemAlloc(dptr: *mut *mut c_void, bytesize: usize) -> CUresult;
-    pub fn cuMemcpyHtoDAsync(
+    pub fn cuMemAlloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> CUresult;
+    pub fn cuMemcpyHtoDAsync_v2(
         dst: *mut c_void,
         src: *const c_void,
         bytesize: usize,
         stream: CUstream,
     ) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
-    pub fn cuMemcpyDtoHAsync(
+    pub fn cuMemcpyDtoHAsync_v2(
         dst: *mut c_void,
         src: *const c_void,
         bytesize: usize,
@@ -154,7 +158,7 @@ pub struct Device {
 }
 impl Drop for Device {
     fn drop(&mut self) {
-        unsafe { cuCtxDestroy(self.context).unwrap() }
+        unsafe { cuCtxDestroy_v2(self.context).unwrap() }
     }
 }
 impl Device {
@@ -167,7 +171,9 @@ impl Device {
         unsafe {
             cuInit(0).unwrap();
             cuDeviceGet(&mut device, 0).unwrap();
-            cuCtxCreate(&mut ctx, 0, device).unwrap();
+            cuCtxCreate_v2(&mut ctx, 0, device).unwrap();
+            cuCtxSetCurrent(ctx).unwrap();
+            // cuCtxSetLimit(1, 1024 * 1024).unwrap();
         }
         Self {
             device,
@@ -185,7 +191,9 @@ impl Device {
                 let mut device = CUdevice(0);
                 let mut ctx = CUcontext(ptr::null_mut());
                 cuDeviceGet(&mut device, i)?;
-                cuCtxCreate(&mut ctx, 0, device)?;
+                cuCtxCreate_v2(&mut ctx, 0, device)?;
+                cuCtxSetCurrent(ctx)?;
+                // cuCtxSetLimit(1, 1024 * 1024)?;
                 res.push(Self {
                     device,
                     context: ctx,
@@ -299,8 +307,8 @@ impl<'b> CUfunction<'b> {
             }
             let length = param.result.len() * mem::size_of::<R>();
             let mut ret = ptr::null_mut();
-            cuMemAlloc(&mut ret, length)?;
-            cuMemcpyHtoDAsync(ret, param.result.as_ptr() as _, length, Device::STREAM)?;
+            cuMemAlloc_v2(&mut ret, length)?;
+            cuMemcpyHtoDAsync_v2(ret, param.result.as_ptr() as _, length, Device::STREAM)?;
             let mut device_mem = param
                 .input
                 .iter()
@@ -308,8 +316,8 @@ impl<'b> CUfunction<'b> {
                 .collect::<Vec<_>>();
             for (device, &(ptr, size)) in device_mem.iter_mut().zip(param.input.iter()) {
                 if size > 0 {
-                    cuMemAlloc(device, size)?;
-                    cuMemcpyHtoDAsync(*device, ptr, size, Device::STREAM)?
+                    cuMemAlloc_v2(device, size)?;
+                    cuMemcpyHtoDAsync_v2(*device, ptr, size, Device::STREAM)?
                 }
             }
             let mut device_ref = device_mem
@@ -331,7 +339,7 @@ impl<'b> CUfunction<'b> {
                 device_ref.as_mut_ptr(), // 参数指针
                 ptr::null_mut(),
             )?;
-            cuMemcpyDtoHAsync(param.result.as_mut_ptr() as _, ret, length, Device::STREAM)?
+            cuMemcpyDtoHAsync_v2(param.result.as_mut_ptr() as _, ret, length, Device::STREAM)?
         }
         Ok(PendingResult(PhantomData))
     }

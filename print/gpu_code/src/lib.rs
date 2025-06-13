@@ -13,6 +13,6 @@ pub unsafe extern "ptx-kernel" fn vec_add(
     inout: *mut i32,
 ) {
     unsafe {
-        vprintf("%d".as_ptr(), inout as *const _ as _);
+        vprintf("block %d thread %d print %d\n\0wtf?".as_ptr(), (&(_block_idx_x(), _thread_idx_x(), *inout.wrapping_add((_block_idx_x() * _block_dim_x() + _thread_idx_x()) as usize))) as *const _ as _);
     }
 }
