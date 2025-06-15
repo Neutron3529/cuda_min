@@ -16,9 +16,6 @@ pub type CUresult = Result<(), CUerror>;
 impl fmt::Debug for CUerror {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let code = self.0.get();
-        #[cfg(feature = "cudart")]
-        let name_desc = unsafe { CUerror::get_name_desc_cudart(code) };
-        #[cfg(not(feature = "cudart"))]
         let name_desc = CUerror::get_name_desc(code);
         if code == 218 || code == 200 {
             write!(
@@ -93,14 +90,16 @@ unsafe extern "C" {
     pub fn cuDeviceGetCount(count: &mut c_int) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
     pub fn cuDeviceGet(device: *mut CUdevice, ordinal: c_int) -> CUresult;
+    #[cfg_attr(feature = "using_v2_suffix", link_name = "cuCtxCreate_v2")]
     #[must_use = "You should check whether the execution successes."]
-    pub fn cuCtxCreate_v2(ctx: *mut CUcontext, flags: c_uint, dev: CUdevice) -> CUresult;
+    pub fn cuCtxCreate(ctx: *mut CUcontext, flags: c_uint, dev: CUdevice) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
     pub fn cuCtxSetCurrent(ctx: CUcontext) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
     pub fn cuCtxSetLimit(limit: c_uint, size: usize) -> CUresult;
+    #[cfg_attr(feature = "using_v2_suffix", link_name = "cuCtxDestroy_v2")]
     #[must_use = "You should check whether the execution successes."]
-    pub fn cuCtxDestroy_v2(ctx: CUcontext) -> CUresult;
+    pub fn cuCtxDestroy(ctx: CUcontext) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
     pub fn cuModuleLoad(module: *mut CUmodule, ptx: *const c_char) -> CUresult;
     #[must_use = "You should check whether the execution successes."]
@@ -111,16 +110,20 @@ unsafe extern "C" {
         module: CUmodule,
         name: *const c_char,
     ) -> CUresult;
+    #[cfg_attr(feature = "using_v2_suffix", link_name = "cuMemAlloc_v2")]
     #[must_use = "You should check whether the execution successes."]
-    pub fn cuMemAlloc_v2(dptr: *mut *mut c_void, bytesize: usize) -> CUresult;
-    pub fn cuMemcpyHtoDAsync_v2(
+    pub fn cuMemAlloc(dptr: *mut *mut c_void, bytesize: usize) -> CUresult;
+    #[cfg_attr(feature = "using_v2_suffix", link_name = "cuMemcpyHtoDAsync_v2")]
+    #[must_use = "You should check whether the execution successes."]
+    pub fn cuMemcpyHtoDAsync(
         dst: *mut c_void,
         src: *const c_void,
         bytesize: usize,
         stream: CUstream,
     ) -> CUresult;
+    #[cfg_attr(feature = "using_v2_suffix", link_name = "cuMemcpyDtoHAsync_v2")]
     #[must_use = "You should check whether the execution successes."]
-    pub fn cuMemcpyDtoHAsync_v2(
+    pub fn cuMemcpyDtoHAsync(
         dst: *mut c_void,
         src: *const c_void,
         bytesize: usize,
@@ -158,7 +161,7 @@ pub struct Device {
 }
 impl Drop for Device {
     fn drop(&mut self) {
-        unsafe { cuCtxDestroy_v2(self.context).unwrap() }
+        unsafe { cuCtxDestroy(self.context).unwrap() }
     }
 }
 impl Device {
@@ -171,7 +174,7 @@ impl Device {
         unsafe {
             cuInit(0).unwrap();
             cuDeviceGet(&mut device, 0).unwrap();
-            cuCtxCreate_v2(&mut ctx, 0, device).unwrap();
+            cuCtxCreate(&mut ctx, 0, device).unwrap();
             cuCtxSetCurrent(ctx).unwrap();
             // cuCtxSetLimit(1, 1024 * 1024).unwrap();
         }
@@ -191,7 +194,7 @@ impl Device {
                 let mut device = CUdevice(0);
                 let mut ctx = CUcontext(ptr::null_mut());
                 cuDeviceGet(&mut device, i)?;
-                cuCtxCreate_v2(&mut ctx, 0, device)?;
+                cuCtxCreate(&mut ctx, 0, device)?;
                 cuCtxSetCurrent(ctx)?;
                 // cuCtxSetLimit(1, 1024 * 1024)?;
                 res.push(Self {
@@ -253,6 +256,10 @@ impl Device {
         unsafe { cuModuleLoadData(&mut module, c_ptx.as_ptr() as _)? }
         Ok(module)
     }
+    #[must_use = "You should check whether the execution successes."]
+    pub fn set_print_buffer(size: usize) -> CUresult {
+        unsafe { cuCtxSetLimit(1, size) }
+    }
 }
 impl<'a> CUmodule<'a> {
     /// Get `CUfunction` from a module.
@@ -307,8 +314,8 @@ impl<'b> CUfunction<'b> {
             }
             let length = param.result.len() * mem::size_of::<R>();
             let mut ret = ptr::null_mut();
-            cuMemAlloc_v2(&mut ret, length)?;
-            cuMemcpyHtoDAsync_v2(ret, param.result.as_ptr() as _, length, Device::STREAM)?;
+            cuMemAlloc(&mut ret, length)?;
+            cuMemcpyHtoDAsync(ret, param.result.as_ptr() as _, length, Device::STREAM)?;
             let mut device_mem = param
                 .input
                 .iter()
@@ -316,8 +323,8 @@ impl<'b> CUfunction<'b> {
                 .collect::<Vec<_>>();
             for (device, &(ptr, size)) in device_mem.iter_mut().zip(param.input.iter()) {
                 if size > 0 {
-                    cuMemAlloc_v2(device, size)?;
-                    cuMemcpyHtoDAsync_v2(*device, ptr, size, Device::STREAM)?
+                    cuMemAlloc(device, size)?;
+                    cuMemcpyHtoDAsync(*device, ptr, size, Device::STREAM)?
                 }
             }
             let mut device_ref = device_mem
@@ -339,7 +346,7 @@ impl<'b> CUfunction<'b> {
                 device_ref.as_mut_ptr(), // 参数指针
                 ptr::null_mut(),
             )?;
-            cuMemcpyDtoHAsync_v2(param.result.as_mut_ptr() as _, ret, length, Device::STREAM)?
+            cuMemcpyDtoHAsync(param.result.as_mut_ptr() as _, ret, length, Device::STREAM)?
         }
         Ok(PendingResult(PhantomData))
     }

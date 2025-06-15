@@ -13,8 +13,9 @@ autoexamples = false
 [dependencies]
 
 [features]
-default = ["panic-handler", "build-script-with-llvm-bitcode-linker"]
+default = ["panic-handler", "build-script-with-llvm-bitcode-linker", "using_v2_suffix"]
+using_v2_suffix = [] # Using cuCtxCreate_v2/cuCtxDestroy_v2/cuMemAlloc_v2/cuMemcpyHtoDAsync_v2/cuMemcpyDtoHAsync_v2 rather than cuCtxCreate/cuCtxDestroy/cuMemAlloc/cuMemcpyHtoDAsync/cuMemcpyDtoHAsync, which is currently default behavior of `cuda.h`. Notice that, without _v2 suffix, some functions (e.g., vprintf) cannot be used. It is hightly recommanded to use _v2 suffix.
 panic-handler = []
-cudart = [] # You must make sure `$CUDA_PATH/lib` in  {LD,}_LIBRARY_PATH thus cargo can find the cudart library. Currently a `cuda_error_code_generator.rs` script is used for generating cuda error related scripts.
+cudart = [] # You must make sure `$CUDA_PATH/lib` in  {LD,}_LIBRARY_PATH thus cargo can find the cudart library. Currently ont recommanded since we actually do not need this.
 build-script-with-llvm-bitcode-linker = [] # Enabled by default, only works with host environment, do not affect GPU side.
 native-error-desc = []

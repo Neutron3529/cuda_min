@@ -6,6 +6,7 @@ fn main() {
     println!("PTX Code:");
     println!("{A}");
     let device = Device::init();
+    Device::set_print_buffer(1024 * 1024 * 1024).unwrap();
 
     let module = device.compile(A).unwrap();
     let func = module.get_function("vec_add").unwrap();

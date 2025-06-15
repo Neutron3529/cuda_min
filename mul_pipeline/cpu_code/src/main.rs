@@ -5,7 +5,7 @@ fn main() {
     const A: &'static str = include_str!(concat!(env!("OUT_DIR"), "/gpu_code.ptx"));
     println!("PTX Code:");
     println!("{A}");
-    let mut device = Device::init();
+    let device = Device::init();
 
     let module = device.compile(A).unwrap();
     let func = module.get_function("vec_add").unwrap();
@@ -24,7 +24,7 @@ fn main() {
                 .push(&input1)
                 .push(&input2)
                 .push(&offset)
-                .shared(1048576),
+                .shared(1024),
         )
         .unwrap();
     res.sync().unwrap();
