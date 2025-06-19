@@ -55,7 +55,7 @@ cargo build --release # build.rs will generate a `{gpu_crate_name}.ptx` in folde
 
 ### default
 
-["panic-handler", "build-script-with-llvm-bitcode-linker"]
+["panic-handler", "build-script-with-llvm-bitcode-linker", "using_v2_suffix"]
 
 ### panic-handler
 
