@@ -7,6 +7,7 @@ use std::{
     num::NonZero,
     ptr,
 };
+
 // CUDA APIs
 #[repr(transparent)]
 #[derive(Copy, Clone)]
