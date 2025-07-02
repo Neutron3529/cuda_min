@@ -118,18 +118,20 @@ macro_rules! repeat {
 #[cfg_attr(all(target_arch = "nvptx64", feature = "panic-handler"), panic_handler)]
 unsafe fn ph(_info: &core::panic::PanicInfo) -> ! {
     use core::arch::nvptx::{_thread_idx_x, _thread_idx_y, _thread_idx_z, _block_idx_x, _block_idx_y, _block_idx_z};
-    #[cfg(feature = "using_v2_suffix")]
-    if let Some(message) = _info.message().as_str() {
-        vprintf(c"block (%d, %d, %d) thread (%d, %d, %d) panics: %s\n", message, _block_idx_x(), _block_idx_y(), _block_idx_z(), _thread_idx_x(), _thread_idx_y(), _thread_idx_z());
-    } else {
-        unsafe { core::arch::nvptx::vprintf(c"block (%d, %d, %d) thread (%d, %d, %d): panic occors.\n".as_ptr() as _, &(_block_idx_x(), _block_idx_y(), _block_idx_z(), _thread_idx_x(), _thread_idx_y(), _thread_idx_z()) as *const _ as _); }
+    unsafe {
+        #[cfg(feature = "using_v2_suffix")]
+        if let Some(message) = _info.message().as_str() {
+            vprintf(c"block (%d, %d, %d) thread (%d, %d, %d) panics: %s\n", message, _block_idx_x(), _block_idx_y(), _block_idx_z(), _thread_idx_x(), _thread_idx_y(), _thread_idx_z());
+        } else {
+            core::arch::nvptx::vprintf(c"block (%d, %d, %d) thread (%d, %d, %d): panic occors.\n".as_ptr() as _, &(_block_idx_x(), _block_idx_y(), _block_idx_z(), _thread_idx_x(), _thread_idx_y(), _thread_idx_z()) as *const _ as _);
+        }
+        #[cfg(feature = "using_v2_suffix")]
+        let caller = _info.location();
+        if let Some(loc) = caller {
+            vprintf_file_loc(c"block (%d, %d, %d) thread (%d, %d, %d):  at file: %s, line: %d column: %d\n", loc.file(), loc.line(), loc.column(), _block_idx_x(), _block_idx_y(), _block_idx_z(), _thread_idx_x(), _thread_idx_y(), _thread_idx_z());
+        }
+        abort()
     }
-    #[cfg(feature = "using_v2_suffix")]
-    let mut caller = _info.location();
-    if let Some(loc) = caller {
-        vprintf_file_loc(c"block (%d, %d, %d) thread (%d, %d, %d):  at file: %s, line: %d column: %d\n", loc.file(), loc.line(), loc.column(), _block_idx_x(), _block_idx_y(), _block_idx_z(), _thread_idx_x(), _thread_idx_y(), _thread_idx_z());
-    }
-    abort()
 }
 
 /// wrapper of vprintf.
