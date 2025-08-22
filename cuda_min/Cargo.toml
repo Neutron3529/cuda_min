@@ -19,3 +19,4 @@ panic-handler = []
 cudart = [] # You must make sure `$CUDA_PATH/lib` in  {LD,}_LIBRARY_PATH thus cargo can find the cudart library. Currently ont recommanded since we actually do not need this.
 build-script-with-llvm-bitcode-linker = [] # Enabled by default, only works with host environment, do not affect GPU side.
 native-error-desc = []
+build-warnings = []

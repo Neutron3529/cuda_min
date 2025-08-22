@@ -1,0 +1,11 @@
+[package]
+name = "test_sha512"
+version = "0.1.0"
+edition = "2024"
+publish = ["crates-io"]
+
+[dependencies]
+cuda_min = { path = "../cuda_min" }
+nalgebra = { version = "0.34.0", default-features = false }
+[build-dependencies]
+cuda_min = { path = "../cuda_min" }

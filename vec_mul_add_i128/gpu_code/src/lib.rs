@@ -10,16 +10,16 @@ use cuda_min;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "ptx-kernel" fn vec_add(
-    input1: *const i32,
-    input2: *const i32,
-    offset: *const i32,
-    output: *mut i32,
+    input1: *const i128,
+    input2: *const i128,
+    offset: *const i128,
+    output: *mut i128,
 ) {
     unsafe {
         let offset = *offset;
         let index = _block_idx_x() * _block_dim_x() + _thread_idx_x();
         let left = *input1.wrapping_add(index as usize);
         let right = *input2.wrapping_add(index as usize);
-        *output.wrapping_add(index as usize) = left + right + offset;
+        *output.wrapping_add(index as usize) = left * right + offset;
     }
 }

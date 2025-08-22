@@ -47,12 +47,17 @@ fn build(name: &str, nvptx_dir: &str, target_dir: &str, profile: &str, clean: bo
     use core::fmt::Display;
     use std::{env, process::Command};
 
+    #[cfg(feature = "build-warnings")]
     fn warning(x: impl Display) {
         println!(
             "{}",
             format!("cargo::warning={x}").replace("\n", "\ncargo::warning=")
         )
     }
+
+    #[cfg(not(feature = "build-warnings"))]
+    #[inline(always)]
+    fn warning(_: impl Display) {}
 
     // Tell Cargo that if the given file changes, to rerun this build script.
     println!("cargo::rerun-if-changed={nvptx_dir}/src");
