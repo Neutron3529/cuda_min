@@ -1,11 +1,54 @@
 #![no_std]
 #![no_main]
 #![feature(abi_ptx, stdarch_nvptx, asm_experimental_arch)]
+#![feature(generic_const_exprs)]
+#[allow(incomplete_features)]
 
-mod consts;
 use core::arch::asm;
 use core::arch::nvptx::*;
 use cuda_min::repeat;
+
+mod consts {
+    // #!/bin/python
+    // def extend(a,b): return ([i for a0 in a[0] for i in range(a0, b*a[1], a[1]) if i % b != 0], a[1]*b)
+    // def extends(a,b): return (sorted(a[0]),len(a[0]),a[1]) if len(b) == 0 else extends(extend(a,b[0]),b[1:])
+    // x = extends(([1],6),[5,7,11,13,17,19])
+    // with open("consts.rs",'w') as f:
+    // f.write(f"pub const RANGE: u32 = {x[2]};\npub const VALS: [u32; {x[1]}] = {x[0]};")
+    // import os
+    // os.system("rustfmt consts.rs")
+    type Calc = u32;
+    struct Mods<const A:usize>([Calc;A], usize) where [();A]:;
+    impl<const A:usize> Mods<A> {
+        const fn next<const B: usize>(self) -> Mods<{A * (B - 1)}>
+        where
+        [(); A * (B - 1)]:,
+        {
+            let mut res = [0 as Calc; A * (B - 1)];
+            let mut i = 0;
+            let mut cntr = 0;
+            while i < self.1 * B {
+                let mut j = 0;
+                while j < A {
+                    let now = self.0[j] + i as Calc;
+                    if now % B as Calc != 0 {
+                        res[cntr] = now;
+                        cntr += 1
+                    }
+                    j += 1
+                }
+                i += self.1;
+            }
+            Mods(res, self.1 * B)
+        }
+    }
+    #[allow(long_running_const_eval)]
+    const LEN: usize = Mods([1],6).next::<5>().next::<7>().next::<11>().next::<13>().next::<17>().next::<19>().0.len();
+    #[allow(long_running_const_eval)]
+    const VALS_RANGE: Mods<LEN> = Mods([1],6).next::<5>().next::<7>().next::<11>().next::<13>().next::<17>().next::<19>();
+    pub const VALS: [Calc;LEN] = VALS_RANGE.0;
+    pub const RANGE: usize = VALS_RANGE.1;
+}
 
 const REM: u64 = 4;
 
@@ -22,7 +65,10 @@ pub unsafe extern "ptx-kernel" fn mont_pows_batch(out: *mut u64) {
         cur -= 1;
         cntr += mont_pows(start + VALS[cur] as u64, aux);
     }
-    unsafe { *out.add((_block_idx_x() * _block_dim_x() + _thread_idx_x()) as usize) = cntr as u64 };
+    // unsafe { *out.add((_block_idx_x() * _block_dim_x() + _thread_idx_x()) as usize) = cntr as u64 };
+    if cntr == 0 {
+        panic!("block {} starts from {} with RANGE = {RANGE} found {cntr} result", (_block_idx_x() * _block_dim_x() + _thread_idx_x()), (_block_idx_x() * _block_dim_x() + _thread_idx_x()) as usize * RANGE)
+    }
 }
 
 #[inline(always)]
