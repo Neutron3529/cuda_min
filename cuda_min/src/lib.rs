@@ -105,7 +105,11 @@
 //! // In fact, this crate already provides such function for target_arch = "nvptx64" with feature "panic_handler". In case you have your own panic handler, just disable that feature.
 //! #[cfg_attr(target_arch = "nvptx64", panic_handler)] fn panic(_:&core::panic::PanicInfo) ->! { loop{} }
 //! ```
-#![cfg_attr(target_arch = "nvptx64", no_std, feature(asm_experimental_arch, stdarch_nvptx))]
+#![cfg_attr(
+    target_arch = "nvptx64",
+    no_std,
+    feature(asm_experimental_arch, stdarch_nvptx)
+)]
 #![feature(trace_macros)]
 
 #[macro_export]
@@ -117,18 +121,50 @@ macro_rules! repeat {
 #[cfg(target_arch = "nvptx64")]
 #[cfg_attr(all(target_arch = "nvptx64", feature = "panic-handler"), panic_handler)]
 unsafe fn ph(_info: &core::panic::PanicInfo) -> ! {
-    use core::arch::nvptx::{_thread_idx_x, _thread_idx_y, _thread_idx_z, _block_idx_x, _block_idx_y, _block_idx_z};
+    use core::arch::nvptx::{
+        _block_idx_x, _block_idx_y, _block_idx_z, _thread_idx_x, _thread_idx_y, _thread_idx_z,
+    };
     unsafe {
         #[cfg(feature = "using_v2_suffix")]
         if let Some(message) = _info.message().as_str() {
-            vprintf(c"block (%d, %d, %d) thread (%d, %d, %d) panics: %s\n", message, _block_idx_x(), _block_idx_y(), _block_idx_z(), _thread_idx_x(), _thread_idx_y(), _thread_idx_z());
+            vprintf(
+                c"block (%d, %d, %d) thread (%d, %d, %d) panics: %s\n",
+                message,
+                _block_idx_x(),
+                _block_idx_y(),
+                _block_idx_z(),
+                _thread_idx_x(),
+                _thread_idx_y(),
+                _thread_idx_z(),
+            );
         } else {
-            core::arch::nvptx::vprintf(c"block (%d, %d, %d) thread (%d, %d, %d): panic occors.\n".as_ptr() as _, &(_block_idx_x(), _block_idx_y(), _block_idx_z(), _thread_idx_x(), _thread_idx_y(), _thread_idx_z()) as *const _ as _);
+            core::arch::nvptx::vprintf(
+                c"block (%d, %d, %d) thread (%d, %d, %d): panic occors.\n".as_ptr() as _,
+                &(
+                    _block_idx_x(),
+                    _block_idx_y(),
+                    _block_idx_z(),
+                    _thread_idx_x(),
+                    _thread_idx_y(),
+                    _thread_idx_z(),
+                ) as *const _ as _,
+            );
         }
         #[cfg(feature = "using_v2_suffix")]
         let caller = _info.location();
         if let Some(loc) = caller {
-            vprintf_file_loc(c"block (%d, %d, %d) thread (%d, %d, %d):  at file: %s, line: %d column: %d\n", loc.file(), loc.line(), loc.column(), _block_idx_x(), _block_idx_y(), _block_idx_z(), _thread_idx_x(), _thread_idx_y(), _thread_idx_z());
+            vprintf_file_loc(
+                c"block (%d, %d, %d) thread (%d, %d, %d):  at file: %s, line: %d column: %d\n",
+                loc.file(),
+                loc.line(),
+                loc.column(),
+                _block_idx_x(),
+                _block_idx_y(),
+                _block_idx_z(),
+                _thread_idx_x(),
+                _thread_idx_y(),
+                _thread_idx_z(),
+            );
         }
         abort()
     }
@@ -139,25 +175,55 @@ unsafe fn ph(_info: &core::panic::PanicInfo) -> ! {
 /// message ends with '\0' is better than without '\0'. There should be exact 1 '\0' in message.
 #[inline(always)]
 #[cfg(target_arch = "nvptx64")]
-pub unsafe fn vprintf(format: &core::ffi::CStr, message: &str, bx: i32, by: i32, bz: i32, tx: i32, ty: i32, tz: i32) {
+pub unsafe fn vprintf(
+    format: &core::ffi::CStr,
+    message: &str,
+    bx: u32,
+    by: u32,
+    bz: u32,
+    tx: u32,
+    ty: u32,
+    tz: u32,
+) {
     #[repr(C)]
-    struct Message(i32, i32, i32, i32, i32, i32,*const u8);
+    struct Message(u32, u32, u32, u32, u32, u32, *const u8);
     if message.ends_with('\0') {
-        unsafe { core::arch::nvptx::vprintf(format.as_ptr() as _, &Message(bx,by,bz,tx,ty,tz,message.as_ptr()) as *const _ as  _); }
+        unsafe {
+            core::arch::nvptx::vprintf(
+                format.as_ptr() as _,
+                &Message(bx, by, bz, tx, ty, tz, message.as_ptr()) as *const _ as _,
+            );
+        }
     } else {
         const BUFFER_MAX: usize = 1024;
-        const TRUNCATE: [u8;4] = *b"...\0";
-        let mut buffer = [0u8;BUFFER_MAX];
+        const TRUNCATE: [u8; 4] = *b"...\0";
+        let mut buffer = [0u8; BUFFER_MAX];
         unsafe {
             if message.len() < BUFFER_MAX {
-                core::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr(), message.len());
+                core::ptr::copy_nonoverlapping(
+                    message.as_ptr(),
+                    buffer.as_mut_ptr(),
+                    message.len(),
+                );
                 buffer[message.len()] = 0
+            } else {
+                core::ptr::copy_nonoverlapping(
+                    message.as_ptr(),
+                    buffer.as_mut_ptr(),
+                    BUFFER_MAX - TRUNCATE.len(),
+                );
+                core::ptr::copy_nonoverlapping(
+                    b"...\0".as_ptr(),
+                    buffer
+                        .as_mut_ptr()
+                        .wrapping_add(BUFFER_MAX - TRUNCATE.len()),
+                    TRUNCATE.len(),
+                );
             }
-            else {
-                core::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr(), BUFFER_MAX - TRUNCATE.len());
-                core::ptr::copy_nonoverlapping(b"...\0".as_ptr(), buffer.as_mut_ptr().wrapping_add(BUFFER_MAX - TRUNCATE.len()), TRUNCATE.len());
-            }
-            core::arch::nvptx::vprintf(format.as_ptr() as _, &Message(bx,by,bz,tx,ty,tz,buffer.as_ptr()) as *const _ as  _);
+            core::arch::nvptx::vprintf(
+                format.as_ptr() as _,
+                &Message(bx, by, bz, tx, ty, tz, buffer.as_ptr()) as *const _ as _,
+            );
         }
     }
 }
@@ -166,25 +232,47 @@ pub unsafe fn vprintf(format: &core::ffi::CStr, message: &str, bx: i32, by: i32,
 /// format should have the format: .. %d .. %d .. %d .. %d .. %d .. %d ..%s .. %d .. %d
 #[inline(always)]
 #[cfg(target_arch = "nvptx64")]
-pub unsafe fn vprintf_file_loc(format: &core::ffi::CStr, message: &str, line: u32, column: u32, bx: i32, by: i32, bz: i32, tx: i32, ty: i32, tz: i32) {
+pub unsafe fn vprintf_file_loc(
+    format: &core::ffi::CStr,
+    message: &str,
+    line: u32,
+    column: u32,
+    bx: u32,
+    by: u32,
+    bz: u32,
+    tx: u32,
+    ty: u32,
+    tz: u32,
+) {
     #[repr(C)]
-    struct Message(i32, i32, i32, i32, i32, i32, *const u8, u32, u32);
+    struct Message(u32, u32, u32, u32, u32, u32, *const u8, u32, u32);
     const BUFFER_MAX: usize = 1024;
-    const TRUNCATE: [u8;4] = *b"...\0";
-    let mut buffer = [0u8;BUFFER_MAX];
+    const TRUNCATE: [u8; 4] = *b"...\0";
+    let mut buffer = [0u8; BUFFER_MAX];
     unsafe {
         if message.len() < BUFFER_MAX {
             core::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr(), message.len());
             buffer[message.len()] = 0
+        } else {
+            core::ptr::copy_nonoverlapping(
+                message.as_ptr(),
+                buffer.as_mut_ptr(),
+                BUFFER_MAX - TRUNCATE.len(),
+            );
+            core::ptr::copy_nonoverlapping(
+                b"...\0".as_ptr(),
+                buffer
+                    .as_mut_ptr()
+                    .wrapping_add(BUFFER_MAX - TRUNCATE.len()),
+                TRUNCATE.len(),
+            );
         }
-        else {
-            core::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr(), BUFFER_MAX - TRUNCATE.len());
-            core::ptr::copy_nonoverlapping(b"...\0".as_ptr(), buffer.as_mut_ptr().wrapping_add(BUFFER_MAX - TRUNCATE.len()), TRUNCATE.len());
-        }
-        core::arch::nvptx::vprintf(format.as_ptr() as _, &Message(bx,by,bz,tx,ty,tz,buffer.as_ptr(), line, column) as *const _ as  _);
+        core::arch::nvptx::vprintf(
+            format.as_ptr() as _,
+            &Message(bx, by, bz, tx, ty, tz, buffer.as_ptr(), line, column) as *const _ as _,
+        );
     }
 }
-
 
 #[inline(always)]
 #[cfg(target_arch = "nvptx64")]

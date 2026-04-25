@@ -1,7 +1,6 @@
 use core::{
-    mem,
     ffi::{CStr, c_int},
-    ptr,
+    mem, ptr,
 };
 
 #[cfg(feature = "native-error-desc")]

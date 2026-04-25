@@ -42,7 +42,7 @@ mod dumper;
 impl CUerror {
     const _ASSERT_SIZE_EQUAL: () = assert!(
         mem::size_of::<CUresult>() == mem::size_of::<c_int>(),
-                                           "CUresult must be c_int"
+        "CUresult must be c_int"
     );
     /// get error code name and descriptions with cudart apis.
     #[cfg(feature = "native-error-desc")]
@@ -151,6 +151,15 @@ unsafe extern "C" {
     pub fn cuCtxSynchronize() -> CUresult; // not used yet.
     #[must_use = "You should check whether the execution successes."]
     pub fn cuStreamSynchronize(stream: CUstream) -> CUresult;
+    /// Create stream, flags must be 0
+    #[must_use = "You should check whether the execution successes."]
+    pub fn cuStreamCreate(stream: *mut CUstream, flags: u32) -> CUresult;
+    /// Destroy stream
+    #[must_use = "You should check whether the execution successes."]
+    pub fn cuStreamDestroy(stream: CUstream) -> CUresult;
+    /// Query stream
+    #[must_use = "You should check whether the execution successes."]
+    pub fn cuStreamQuery(stream: CUstream) -> CUresult;
 }
 
 /// Cuda device and context
@@ -306,6 +315,20 @@ impl<'b> CUfunction<'b> {
     where
         'b: 'c,
     {
+        self.stream_call(param, Device::STREAM)
+    }
+    /// Call a CUfunction, take care!
+    /// SAFETY: You should check very careful since it is a ffi call, and it calls an unsafe function.
+    /// You should notice that, this is not marked as unsafe, but you should always remember, this is not a safe function.
+    #[must_use = "You should check whether the execution successes."]
+    pub fn stream_call<'c, R>(
+        self,
+        param: Param<'c, R>,
+        stream: CUstream,
+    ) -> Result<PendingResult<'c>, CUerror>
+    where
+        'b: 'c,
+    {
         // SAFETY: Massive ffi calls.
         unsafe {
             let len = param.len;
@@ -316,7 +339,7 @@ impl<'b> CUfunction<'b> {
             let length = param.result.len() * mem::size_of::<R>();
             let mut ret = ptr::null_mut();
             cuMemAlloc(&mut ret, length)?;
-            cuMemcpyHtoDAsync(ret, param.result.as_ptr() as _, length, Device::STREAM)?;
+            cuMemcpyHtoDAsync(ret, param.result.as_ptr() as _, length, stream)?;
             let mut device_mem = param
                 .input
                 .iter()
@@ -325,7 +348,7 @@ impl<'b> CUfunction<'b> {
             for (device, &(ptr, size)) in device_mem.iter_mut().zip(param.input.iter()) {
                 if size > 0 {
                     cuMemAlloc(device, size)?;
-                    cuMemcpyHtoDAsync(*device, ptr, size, Device::STREAM)?
+                    cuMemcpyHtoDAsync(*device, ptr, size, stream)?
                 }
             }
             let mut device_ref = device_mem
@@ -343,11 +366,11 @@ impl<'b> CUfunction<'b> {
                 param.block_size.1,      // block 维度
                 param.block_size.2,      // ----------
                 param.shared_mem,        // 共享内存
-                Device::STREAM,          // 流
+                stream,                  // 流
                 device_ref.as_mut_ptr(), // 参数指针
                 ptr::null_mut(),
             )?;
-            cuMemcpyDtoHAsync(param.result.as_mut_ptr() as _, ret, length, Device::STREAM)?
+            cuMemcpyDtoHAsync(param.result.as_mut_ptr() as _, ret, length, stream)?
         }
         Ok(PendingResult(PhantomData))
     }
